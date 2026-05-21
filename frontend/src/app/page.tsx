@@ -16,6 +16,8 @@ export interface FormValues {
   depth_mm: number
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -42,6 +44,13 @@ export default function Home() {
 
   const handleGenerate = async () => {
     if (!file) return
+
+    if (!API_URL) {
+      setErrorMsg('Backend URL not configured. Set NEXT_PUBLIC_API_URL in Vercel environment variables.')
+      setAppState('error')
+      return
+    }
+
     setAppState('loading')
     setStep(0)
     setErrorMsg(null)
@@ -61,14 +70,14 @@ export default function Home() {
       fd.append('base_mm', String(form.base_mm))
       fd.append('depth_mm', String(form.depth_mm))
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/generate`, {
+      const res = await fetch(`${API_URL}/generate`, {
         method: 'POST',
         body: fd,
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data?.detail?.message || 'Generation failed.')
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data?.detail?.message || `Server error: ${res.status}`)
       }
 
       const score = parseFloat(res.headers.get('X-Guardrail-Score') || '0')
@@ -80,14 +89,13 @@ export default function Home() {
       setStep(6)
       setAppState('done')
     } catch (e: unknown) {
-      setErrorMsg(e instanceof Error ? e.message : 'Unknown error.')
+      setErrorMsg(e instanceof Error ? e.message : 'Unknown error. Check console.')
       setAppState('error')
     }
   }
 
   return (
     <main className="min-h-screen bg-bg-primary flex flex-col items-center px-4 py-12">
-      {/* Header */}
       <div className="mb-10 text-center">
         <h1 className="font-heading text-4xl font-bold text-white tracking-tight">
           Print<span className="text-accent">Forge</span>
@@ -97,7 +105,6 @@ export default function Home() {
         </p>
       </div>
 
-      {/* Main Card */}
       <div className="w-full max-w-lg bg-bg-card border border-border-dark rounded-2xl p-6 flex flex-col gap-6 shadow-2xl">
 
         <UploadZone onFile={handleFile} preview={preview} />
